@@ -40,9 +40,12 @@ motor IntakeMotor = motor(PORT13, ratio18_1, false);
 bool isIntakeMotorSpinning = false;
 int intakeDirection = 1;
 
-motor RotationalClaw = motor(PORT5, ratio18_1, false);
+motor RotationalClaw = motor(PORT5, ratio18_1, true);
 bool isRotationalClawSpinning = false;
 int rotationalClawDirection = 1;
+
+motor RotationalClawAngle = motor(PORT4, ratio36_1, true);
+bool isRotationalClawScoring = false;
 
 
 /*---------------------------------------------------------------------------*/
@@ -110,50 +113,58 @@ void spinIntake(int direction) {
   }
 }
 
-void spinCascade(int direction) {
-  if(isCascadeMoving && cascadeDirection == direction) {
-    CascadeMotor.stop();
-    isCascadeMoving = false;
-  } else {
-    cascadeDirection = direction;
-    CascadeMotor.spin(forward, 11 * intakeDirection, volt);
-    isCascadeMoving = true;
-  }
+void stopIntake() {
+  IntakeMotor.stop();
+  isIntakeMotorSpinning = false;
 }
 
-void spinRotationalClaw(int direction) {
-  if(isRotationalClawSpinning && rotationalClawDirection == direction) {
-    RotationalClaw.stop();
-    isRotationalClawSpinning = false;
+void spinCascade(int direction, bool waitForCompletion = false) {
+  cascadeDirection = direction;
+  if(direction == -1) {
+    CascadeMotor.spinTo(0, turns, waitForCompletion);
   } else {
-    rotationalClawDirection = direction;
-    RotationalClaw.spin(forward, 11 * intakeDirection, volt);
-    isRotationalClawSpinning = true;
+    CascadeMotor.spinTo(1.5 + CascadeMotor.position(turns), turns, waitForCompletion);
   }
+  isCascadeMoving = true;
 }
 
-void spinIntakeForward() {
+void intakeRotationalClaw() {
+  isRotationalClawSpinning = true;
+  rotationalClawDirection = 1;
+  RotationalClaw.spin(forward, 11 * rotationalClawDirection, volt);
+}
+
+void outakeRotationalClaw() {
+  isRotationalClawSpinning = true;
+  rotationalClawDirection = -1;
+  RotationalClaw.spin(forward, 11 * rotationalClawDirection, volt);
+}
+
+void stopRotationalClaw() {
+  isRotationalClawSpinning = false;
+  RotationalClaw.stop();
+}
+
+void rotationalClawAnglePositionToLoading() {
+  RotationalClawAngle.spinToPosition(0, degrees, false);
+}
+
+void rotationalClawAnglePositionToScoring() {
+  RotationalClawAngle.spinToPosition(190, degrees, false);
+}
+
+void intake() {
+  spinCascade(-1, true);
+  rotationalClawAnglePositionToLoading();
+  intakeRotationalClaw();
   spinIntake(1);
 }
 
-void spinIntakeBackward() {
-  spinIntake(-1);
-}
-
-void raiseCascadeUp() {
+void readyForScoring() {
+  rotationalClawAnglePositionToScoring();
   spinCascade(1);
-}
-
-void raiseCascadeDown() {
-  spinCascade(-1);
-}
-
-void rotationalClawIntake() {
-  spinRotationalClaw(1);
-}
-
-void rotationalClawOutake() {
-  spinRotationalClaw(-1);
+  stopRotationalClaw();
+  stopIntake();
 }
 
 void setUp() {
@@ -163,7 +174,11 @@ void setUp() {
 
   CascadeMotor.stop();
 
+  RotationalClawAngle.setBrake(hold);
+  RotationalClawAngle.setPosition(0, degrees);
+
   CascadeMotor.setBrake(hold);
+  CascadeMotor.setVelocity(100, percent);
 
   CascadeMotor.setPosition(0, degrees);
 
@@ -172,12 +187,9 @@ void setUp() {
 
 void pre_auton(void) {
   setUp();
-  Controller1.ButtonUp.pressed(spinIntakeForward);
-  Controller1.ButtonDown.pressed(spinIntakeBackward);
-  Controller1.ButtonR1.pressed(raiseCascadeUp);
-  Controller1.ButtonR2.pressed(raiseCascadeDown);
-  Controller1.ButtonL1.pressed(rotationalClawIntake);
-  Controller1.ButtonL2.pressed(rotationalClawOutake);
+  Controller1.ButtonL1.pressed(intake);
+  Controller1.ButtonL2.pressed(readyForScoring);
+  Controller1.ButtonR1.pressed(outakeRotationalClaw);
   // All activities that occur before the competition starts
   // Example: clearing encoders, setting servo positions, ...
 }
