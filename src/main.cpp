@@ -33,16 +33,28 @@ motor FrontLeftDrive = motor(PORT2, ratio18_1, true);
 
 motor CascadeMotor = motor(PORT15, ratio18_1, true);
 bool isSetUp = false;
-bool isCascadeMoving = false;
-int cascadeDirection = 1;
 
 motor IntakeMotor = motor(PORT13, ratio18_1, false);
 bool isIntakeMotorSpinning = false;
 int intakeDirection = 1;
 
-motor RotationalClaw = motor(PORT5, ratio18_1, false);
+motor RotationalClaw = motor(PORT5, ratio18_1, true);
 bool isRotationalClawSpinning = false;
 int rotationalClawDirection = 1;
+
+motor RotationalClawAngle = motor(PORT4, ratio36_1, true);
+bool isRotationalClawScoring = false;
+
+
+/* 0: in rest position
+ * 1: intaking
+ * -1: outaking
+ * 2: raising
+ * -2: lowering
+ * 3: score
+ * -3: unscore
+*/
+int intakeState = 0;
 
 
 /*---------------------------------------------------------------------------*/
@@ -54,6 +66,8 @@ int rotationalClawDirection = 1;
 /*  function is only called once after the V5 has been powered on and        */
 /*  not every time that the robot is disabled.                               */
 /*---------------------------------------------------------------------------*/
+
+// These functions draw the texas flag
 
 bool aboveLine(double x, double y, double px1, double py1, double px2, double py2) {
   return (py2 - py1) * (x - px1) / (px2 - px1) + py1 <= y;
@@ -110,51 +124,153 @@ void spinIntake(int direction) {
   }
 }
 
-void spinCascade(int direction) {
-  if(isCascadeMoving && cascadeDirection == direction) {
-    CascadeMotor.stop();
-    isCascadeMoving = false;
-  } else {
-    cascadeDirection = direction;
-    CascadeMotor.spin(forward, 11 * intakeDirection, volt);
-    isCascadeMoving = true;
-  }
+// These are the helper functions for managing the intake
+
+void stopIntake() {
+  IntakeMotor.stop();
+  isIntakeMotorSpinning = false;
 }
 
-void spinRotationalClaw(int direction) {
-  if(isRotationalClawSpinning && rotationalClawDirection == direction) {
-    RotationalClaw.stop();
-    isRotationalClawSpinning = false;
-  } else {
-    rotationalClawDirection = direction;
-    RotationalClaw.spin(forward, 11 * intakeDirection, volt);
-    isRotationalClawSpinning = true;
-  }
+void raiseCascade() {
+  CascadeMotor.spinTo(CascadeMotor.position(turns) + 6, turns);
 }
 
-void spinIntakeForward() {
+void lowerCascade() {
+  double newPosition = CascadeMotor.position(turns) - 6;
+  if(newPosition < 0) {
+    newPosition = 0;
+  }
+  CascadeMotor.spinTo(newPosition, turns);
+}
+
+void cascadeToScoringPosition(bool waitForCompletion = false) {
+  CascadeMotor.spinTo(0, turns, waitForCompletion);
+}
+
+void intakeRotationalClaw() {
+  isRotationalClawSpinning = true;
+  rotationalClawDirection = 1;
+  RotationalClaw.spin(forward, 11 * rotationalClawDirection, volt);
+}
+
+void outakeRotationalClaw() {
+  isRotationalClawSpinning = true;
+  rotationalClawDirection = -1;
+  RotationalClaw.spin(forward, 11 * rotationalClawDirection, volt);
+}
+
+void stopRotationalClaw() {
+  isRotationalClawSpinning = false;
+  RotationalClaw.stop();
+}
+
+void rotationalClawAnglePositionToLoading() {
+  RotationalClawAngle.spinToPosition(0, degrees, false);
+}
+
+void rotationalClawAnglePositionToScoring() {
+  RotationalClawAngle.spinToPosition(190, degrees, false);
+}
+
+//These are the state functions
+
+void setToRestState() {
+  intakeState = 0;
+  stopRotationalClaw();
+  stopIntake();
+  cascadeToScoringPosition(true);
+  rotationalClawAnglePositionToLoading();
+}
+
+void setToIntakeState() {
+  intakeState = 1;
+  setToRestState();
+  intakeRotationalClaw();
   spinIntake(1);
 }
 
-void spinIntakeBackward() {
+void setToOutakeState() {
+  intakeState = -1;
+  setToRestState();
+  outakeRotationalClaw();
   spinIntake(-1);
 }
 
-void raiseCascadeUp() {
-  spinCascade(1);
+void setToRaiseState() {
+  intakeState = 2;
+  setToRestState();
+  rotationalClawAnglePositionToScoring();
+  CascadeMotor.spinTo(2, turns, true);
 }
 
-void raiseCascadeDown() {
-  spinCascade(-1);
+void setToScoreState() {
+  intakeState = 3;
+  outakeRotationalClaw();
+  raiseCascade();
 }
 
-void rotationalClawIntake() {
-  spinRotationalClaw(1);
+void setToUnscoreState() {
+  intakeState = -3;
+  intakeRotationalClaw();
+  lowerCascade();
 }
 
-void rotationalClawOutake() {
-  spinRotationalClaw(-1);
+// These functions are called by the controller
+
+void intake() {
+  if(intakeState != 1) {
+    setToIntakeState();
+  } else {
+    setToRestState();
+  }
 }
+
+void outake() {
+  if(intakeState != -1) {
+    setToOutakeState();
+  } else {
+    setToRestState();
+  }
+}
+
+bool isCascadeUp() {
+  return intakeState == 2 || intakeState == -2 || intakeState == 3 || intakeState == -3;
+}
+
+void raiseClaw() {
+  if(!isCascadeUp()) {
+    setToRaiseState();
+  } else {
+    raiseCascade();
+  }
+  intakeState = 2;
+}
+
+void lowerClaw() {
+  if(!isCascadeUp()) {
+    return;
+  }
+  intakeState = -2;
+  if(CascadeMotor.position(turns) <= 6) {
+    setToRestState();
+  } else {
+    lowerCascade();
+  }
+}
+
+void score() {
+  if(isCascadeUp()) {
+    setToScoreState();
+  }
+}
+
+void unscore() {
+  if(isCascadeUp()) {
+    setToUnscoreState();
+  }
+}
+
+// These functions sets up the robot
 
 void setUp() {
   CascadeMotor.spin(forward, 1, volt);
@@ -163,7 +279,11 @@ void setUp() {
 
   CascadeMotor.stop();
 
+  RotationalClawAngle.setBrake(hold);
+  RotationalClawAngle.setPosition(0, degrees);
+
   CascadeMotor.setBrake(hold);
+  CascadeMotor.setVelocity(100, percent);
 
   CascadeMotor.setPosition(0, degrees);
 
@@ -172,12 +292,13 @@ void setUp() {
 
 void pre_auton(void) {
   setUp();
-  Controller1.ButtonUp.pressed(spinIntakeForward);
-  Controller1.ButtonDown.pressed(spinIntakeBackward);
-  Controller1.ButtonR1.pressed(raiseCascadeUp);
-  Controller1.ButtonR2.pressed(raiseCascadeDown);
-  Controller1.ButtonL1.pressed(rotationalClawIntake);
-  Controller1.ButtonL2.pressed(rotationalClawOutake);
+  Controller1.ButtonL1.pressed(intake);
+  Controller1.ButtonL2.pressed(outake);
+  Controller1.ButtonR1.pressed(raiseClaw);
+  Controller1.ButtonR2.pressed(lowerClaw);
+  Controller1.ButtonDown.pressed(unscore);
+  Controller1.ButtonUp.pressed(score);
+
   // All activities that occur before the competition starts
   // Example: clearing encoders, setting servo positions, ...
 }
@@ -213,8 +334,8 @@ void moveForward(){
 /*---------------------------------------------------------------------------*/
 
 void updateDriveMotors() {
-  double rightMotorVolts = 10.0 * (Controller1.Axis3.position() - Controller1.Axis1.position()) / 90.0;
-  double leftMotorVolts = 10.0 * (Controller1.Axis3.position() + Controller1.Axis1.position()) / 90.0;
+  double rightMotorVolts = 10.0 * (Controller1.Axis2.position() + Controller1.Axis1.position()) / 90.0;
+  double leftMotorVolts = 10.0 * (Controller1.Axis2.position() - Controller1.Axis1.position()) / 90.0;
 
   BackRightDrive.spin(forward, rightMotorVolts, volt);
   FrontRightDrive.spin(forward, rightMotorVolts, volt);
