@@ -45,6 +45,8 @@ int rotationalClawDirection = 1;
 motor RotationalClawAngle = motor(PORT4, ratio36_1, true);
 bool isRotationalClawScoring = false;
 
+digital_out Toggle = digital_out(Brain.ThreeWirePort.A);
+
 
 /* 0: in rest position
  * 1: intaking
@@ -217,6 +219,10 @@ void setToUnscoreState() {
 
 // These functions are called by the controller
 
+void flipToggle() {
+  Toggle.set(!Toggle.value());
+}
+
 void intake() {
   if(intakeState != 1) {
     setToIntakeState();
@@ -298,6 +304,8 @@ void pre_auton(void) {
   Controller1.ButtonR2.pressed(lowerClaw);
   Controller1.ButtonDown.pressed(unscore);
   Controller1.ButtonUp.pressed(score);
+  Controller1.ButtonX.pressed(flipToggle);
+  Controller1.ButtonB.pressed(setToRestState);
 
   // All activities that occur before the competition starts
   // Example: clearing encoders, setting servo positions, ...
@@ -334,8 +342,8 @@ void moveForward(){
 /*---------------------------------------------------------------------------*/
 
 void updateDriveMotors() {
-  double rightMotorVolts = 10.0 * (Controller1.Axis2.position() + Controller1.Axis1.position()) / 90.0;
-  double leftMotorVolts = 10.0 * (Controller1.Axis2.position() - Controller1.Axis1.position()) / 90.0;
+  double rightMotorVolts = 10.0 * (Controller1.Axis3.position() + Controller1.Axis4.position()) / 90.0;
+  double leftMotorVolts = 10.0 * (Controller1.Axis3.position() - Controller1.Axis4.position()) / 90.0;
 
   BackRightDrive.spin(forward, rightMotorVolts, volt);
   FrontRightDrive.spin(forward, rightMotorVolts, volt);
