@@ -35,12 +35,8 @@ motor CascadeMotor = motor(PORT15, ratio18_1, true);
 bool isSetUp = false;
 
 motor IntakeMotor = motor(PORT13, ratio18_1, false);
-bool isIntakeMotorSpinning = false;
-int intakeDirection = 1;
 
 motor RotationalClaw = motor(PORT5, ratio18_1, true);
-bool isRotationalClawSpinning = false;
-int rotationalClawDirection = 1;
 
 motor RotationalClawAngle = motor(PORT4, ratio36_1, true);
 bool isRotationalClawScoring = false;
@@ -115,87 +111,77 @@ void drawTexanFlag() {
   drawStar();
 }
 
-void spinIntake(int direction) {
-  if(isIntakeMotorSpinning && intakeDirection == direction) {
-    IntakeMotor.stop();
-    isIntakeMotorSpinning = false;
-  } else {
-    intakeDirection = direction;
-    IntakeMotor.spin(forward, 11 * intakeDirection, volt);
-    isIntakeMotorSpinning = true;
-  }
-}
-
 // These are the helper functions for managing the intake
 
-void stopIntake() {
-  IntakeMotor.stop();
-  isIntakeMotorSpinning = false;
+void spinCascadeToPos(double turn, bool waitForCompletion = false) {
+  if(turn < 0) {
+    CascadeMotor.spinTo(0, turns, waitForCompletion);
+  } else if(turn > 3 * 6 + 2) {
+    CascadeMotor.spinTo(3 * 6 + 2, turns, waitForCompletion);
+  } else {
+    CascadeMotor.spinTo(turn, turns, waitForCompletion);
+  }
 }
 
 void raiseCascade() {
-  CascadeMotor.spinTo(CascadeMotor.position(turns) + 6, turns);
+  spinCascadeToPos(CascadeMotor.position(turns) + 6, true);
 }
 
 void lowerCascade() {
-  double newPosition = CascadeMotor.position(turns) - 6;
-  if(newPosition < 0) {
-    newPosition = 0;
-  }
-  CascadeMotor.spinTo(newPosition, turns);
-}
-
-void cascadeToScoringPosition(bool waitForCompletion = false) {
-  CascadeMotor.spinTo(0, turns, waitForCompletion);
+  spinCascadeToPos(CascadeMotor.position(turns) - 6, true);
 }
 
 void intakeRotationalClaw() {
-  isRotationalClawSpinning = true;
-  rotationalClawDirection = 1;
-  RotationalClaw.spin(forward, 11 * rotationalClawDirection, volt);
+  RotationalClaw.spin(forward, 11, volt);
 }
 
 void outakeRotationalClaw() {
-  isRotationalClawSpinning = true;
-  rotationalClawDirection = -1;
-  RotationalClaw.spin(forward, 11 * rotationalClawDirection, volt);
+  RotationalClaw.spin(forward, -11, volt);
 }
 
 void stopRotationalClaw() {
-  isRotationalClawSpinning = false;
   RotationalClaw.stop();
 }
 
-void rotationalClawAnglePositionToLoading() {
-  RotationalClawAngle.spinToPosition(0, degrees, false);
+void rotationalClawAnglePositionToLoading(bool waitForCompletion = false) {
+  RotationalClawAngle.spinToPosition(0, degrees, waitForCompletion);
 }
 
-void rotationalClawAnglePositionToScoring() {
-  RotationalClawAngle.spinToPosition(190, degrees, false);
+void rotationalClawAnglePositionToScoring(bool waitForCompletion = false) {
+  RotationalClawAngle.spinToPosition(190, degrees, waitForCompletion);
+}
+
+void spinIntakeForward() {
+  IntakeMotor.spin(forward, 11, volt);
+}
+
+void spinIntakeReverse() {
+  IntakeMotor.spin(reverse, 11, volt);
 }
 
 //These are the state functions
 
 void setToRestState() {
   intakeState = 0;
-  stopRotationalClaw();
-  stopIntake();
-  cascadeToScoringPosition(true);
-  rotationalClawAnglePositionToLoading();
+  RotationalClaw.stop();
+  IntakeMotor.stop();
+  spinCascadeToPos(0, true);
+
+  rotationalClawAnglePositionToLoading(true);
 }
 
 void setToIntakeState() {
   intakeState = 1;
   setToRestState();
   intakeRotationalClaw();
-  spinIntake(1);
+  spinIntakeForward();
 }
 
 void setToOutakeState() {
   intakeState = -1;
   setToRestState();
   outakeRotationalClaw();
-  spinIntake(-1);
+  spinIntakeReverse();
 }
 
 void setToRaiseState() {
@@ -327,10 +313,6 @@ void autonomous(void) {
   // ..........................................................................
 }
 
-void moveForward(){
-  
-}
-
 /*---------------------------------------------------------------------------*/
 /*                                                                           */
 /*                              User Control Task                            */
@@ -340,6 +322,8 @@ void moveForward(){
 /*                                                                           */
 /*  You must modify the code to add your own robot specific commands here.   */
 /*---------------------------------------------------------------------------*/
+
+
 
 void updateDriveMotors() {
   double rightMotorVolts = 10.0 * (Controller1.Axis3.position() + Controller1.Axis4.position()) / 90.0;
