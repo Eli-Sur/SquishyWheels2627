@@ -37,7 +37,7 @@ double LAYER_HEIGHT = 3;
 double CASCADE_MIN_POSITION = 2.1;
 double CASCADE_MAX_POSITION = 3 * LAYER_HEIGHT + CASCADE_MIN_POSITION;
 
-double cascadeLayer = -1;
+double cascadeLayer = 0;
 
 motor IntakeMotor = motor(PORT13, ratio18_1, false);
 
@@ -120,7 +120,7 @@ void drawTexanFlag() {
 
 void spinCascadeToPos(double turn, bool waitForCompletion = false) {
   if(turn < CASCADE_MIN_POSITION) {
-    CascadeMotor.spinTo(0, turns, waitForCompletion);
+    CascadeMotor.spinTo(CASCADE_MIN_POSITION, turns, waitForCompletion);
   } else if(turn > CASCADE_MAX_POSITION) {
     CascadeMotor.spinTo(CASCADE_MAX_POSITION, turns, waitForCompletion);
   } else {
