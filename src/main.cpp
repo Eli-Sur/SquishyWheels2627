@@ -31,8 +31,13 @@ motor BackLeftDrive = motor(PORT1, ratio18_1, false);
 motor FrontRightDrive = motor(PORT12, ratio18_1, false);
 motor FrontLeftDrive = motor(PORT2, ratio18_1, true);
 
-motor CascadeMotor = motor(PORT15, ratio18_1, true);
+motor CascadeMotor = motor(PORT15, ratio36_1, true);
 bool isSetUp = false;
+double LAYER_HEIGHT = 3;
+double CASCADE_MIN_POSITION = 2.1;
+double CASCADE_MAX_POSITION = 3 * LAYER_HEIGHT + CASCADE_MIN_POSITION;
+
+double cascadeLayer = -1;
 
 motor IntakeMotor = motor(PORT13, ratio18_1, false);
 
@@ -114,21 +119,23 @@ void drawTexanFlag() {
 // These are the helper functions for managing the intake
 
 void spinCascadeToPos(double turn, bool waitForCompletion = false) {
-  if(turn < 0) {
+  if(turn < CASCADE_MIN_POSITION) {
     CascadeMotor.spinTo(0, turns, waitForCompletion);
-  } else if(turn > 3 * 6 + 2) {
-    CascadeMotor.spinTo(3 * 6 + 2, turns, waitForCompletion);
+  } else if(turn > CASCADE_MAX_POSITION) {
+    CascadeMotor.spinTo(CASCADE_MAX_POSITION, turns, waitForCompletion);
   } else {
     CascadeMotor.spinTo(turn, turns, waitForCompletion);
   }
 }
 
 void raiseCascade() {
-  spinCascadeToPos(CascadeMotor.position(turns) + 6, true);
+  cascadeLayer++;
+  spinCascadeToPos(cascadeLayer * LAYER_HEIGHT, true);
 }
 
 void lowerCascade() {
-  spinCascadeToPos(CascadeMotor.position(turns) - 6, true);
+  cascadeLayer--;
+  spinCascadeToPos(cascadeLayer * LAYER_HEIGHT, true);
 }
 
 void intakeRotationalClaw() {
@@ -151,6 +158,10 @@ void rotationalClawAnglePositionToScoring(bool waitForCompletion = false) {
   RotationalClawAngle.spinToPosition(190, degrees, waitForCompletion);
 }
 
+void rotationalClawAnglePositionToMaxScoring(bool waitForCompletion = false) {
+  RotationalClawAngle.spinToPosition(270, degrees, waitForCompletion);
+}
+
 void spinIntakeForward() {
   IntakeMotor.spin(forward, 11, volt);
 }
@@ -163,6 +174,7 @@ void spinIntakeReverse() {
 
 void setToRestState() {
   intakeState = 0;
+  cascadeLayer = 0;
   RotationalClaw.stop();
   IntakeMotor.stop();
   spinCascadeToPos(0, true);
@@ -188,7 +200,7 @@ void setToRaiseState() {
   intakeState = 2;
   setToRestState();
   rotationalClawAnglePositionToScoring();
-  CascadeMotor.spinTo(2, turns, true);
+  raiseCascade();
 }
 
 void setToScoreState() {
@@ -201,6 +213,12 @@ void setToUnscoreState() {
   intakeState = -3;
   intakeRotationalClaw();
   lowerCascade();
+}
+
+void setToMaxScoreState() {
+  intakeState = 4;
+  outakeRotationalClaw();
+  rotationalClawAnglePositionToMaxScoring();
 }
 
 // These functions are called by the controller
@@ -230,9 +248,14 @@ bool isCascadeUp() {
 }
 
 void raiseClaw() {
+  if(intakeState == -3) {
+    stopRotationalClaw();
+  }
+
   if(!isCascadeUp()) {
     setToRaiseState();
   } else {
+    rotationalClawAnglePositionToScoring();
     raiseCascade();
   }
   intakeState = 2;
@@ -242,17 +265,25 @@ void lowerClaw() {
   if(!isCascadeUp()) {
     return;
   }
+  if(intakeState == 3) {
+    stopRotationalClaw();
+  }
   intakeState = -2;
-  if(CascadeMotor.position(turns) <= 6) {
+  if(cascadeLayer == 0) {
     setToRestState();
   } else {
+    rotationalClawAnglePositionToScoring();
     lowerCascade();
   }
 }
 
 void score() {
-  if(isCascadeUp()) {
+  if(!isCascadeUp()) { return; }
+
+  if(cascadeLayer < 3) {
     setToScoreState();
+  } else {
+    setToMaxScoreState();
   }
 }
 
