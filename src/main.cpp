@@ -304,10 +304,10 @@ void setUp() {
   CascadeMotor.setBrake(hold);
   CascadeMotor.setVelocity(100, percent);
 
-  // FrontLeftDrive.setVelocity(100, percent);
-  // FrontRightDrive.setVelocity(100, percent);
-  // BackLeftDrive.setVelocity(100, percent);
-  // BackRightDrive.setVelocity(100, percent);
+  FrontLeftDrive.setVelocity(100, percent);
+  FrontRightDrive.setVelocity(100, percent);
+  BackLeftDrive.setVelocity(100, percent);
+  BackRightDrive.setVelocity(100, percent);
 
   FrontLeftDrive.setBrake(hold);
   FrontRightDrive.setBrake(hold);
@@ -356,8 +356,48 @@ void driveForward(double feet) {
   BackRightDrive.spinTo(feetInTurns, turns);
 }
 
+void turnRight(double degree) {
+  double degreeInTurns = 13.5 / 3.25 * 1.5 / 2.0 / 360.0;
+
+  FrontLeftDrive.spinTo(degreeInTurns * degree, turns, false);
+  BackLeftDrive.spinTo(degreeInTurns * degree, turns, false);
+  FrontRightDrive.spinTo(degreeInTurns * degree, turns, false);
+  BackRightDrive.spinTo(degreeInTurns * degree, turns);
+}
+
+int autonomousState = 0;
+
+void autonomousScoringThread() {
+  wait(2, seconds);
+  rotationalClawAnglePositionToScoring();
+
+  while (autonomousState < 1) {
+    wait(20, msec);
+  }
+
+  outakeRotationalClaw();
+  
+  autonomousState = 2;
+  
+}
+
 void autonomous(void) {
-  driveForward(2);
+  thread aThread = thread(autonomousScoringThread);
+
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+  driveForward(-0.5);
+  turnRight(90);
+  driveForward(-19.0 / 12);
+  autonomousState = 1;
+
+  while (autonomousState < 2) {
+    wait(20, msec);
+  }
+
+  driveForward(0.5);
+
   // ..........................................................................
   // Insert autonomous user code here.
   // ..........................................................................
