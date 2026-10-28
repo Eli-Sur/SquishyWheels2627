@@ -119,8 +119,8 @@ void drawTexanFlag() {
 // These are the helper functions for managing the intake
 
 void spinCascadeToPos(double turn, bool waitForCompletion = false) {
-  if(turn < CASCADE_MIN_POSITION) {
-    CascadeMotor.spinTo(CASCADE_MIN_POSITION, turns, waitForCompletion);
+  if(turn < 0) {
+    CascadeMotor.spinTo(0, turns, waitForCompletion);
   } else if(turn > CASCADE_MAX_POSITION) {
     CascadeMotor.spinTo(CASCADE_MAX_POSITION, turns, waitForCompletion);
   } else {
@@ -177,7 +177,7 @@ void setToRestState() {
   cascadeLayer = 0;
   RotationalClaw.stop();
   IntakeMotor.stop();
-  spinCascadeToPos(0, true);
+  CascadeMotor.spinToPosition(0, degrees, true);
 
   rotationalClawAnglePositionToLoading(true);
 }
@@ -296,11 +296,7 @@ void unscore() {
 // These functions sets up the robot
 
 void setUp() {
-  CascadeMotor.spin(forward, 1, volt);
-
-  wait(2, sec);
-
-  CascadeMotor.stop();
+  isSetUp = true;
 
   RotationalClawAngle.setBrake(hold);
   RotationalClawAngle.setPosition(0, degrees);
@@ -308,13 +304,27 @@ void setUp() {
   CascadeMotor.setBrake(hold);
   CascadeMotor.setVelocity(100, percent);
 
-  CascadeMotor.setPosition(0, degrees);
+  // FrontLeftDrive.setVelocity(100, percent);
+  // FrontRightDrive.setVelocity(100, percent);
+  // BackLeftDrive.setVelocity(100, percent);
+  // BackRightDrive.setVelocity(100, percent);
 
-  isSetUp = true;
+  FrontLeftDrive.setBrake(hold);
+  FrontRightDrive.setBrake(hold);
+  BackLeftDrive.setBrake(hold);
+  BackRightDrive.setBrake(hold);
+
+  CascadeMotor.spin(forward, 2, volt);
+
+  wait(2, sec);
+
+  CascadeMotor.stop();
+
+  CascadeMotor.setPosition(0, degrees);
 }
 
 void pre_auton(void) {
-  setUp();
+  thread one = thread(setUp);
   Controller1.ButtonL1.pressed(intake);
   Controller1.ButtonL2.pressed(outake);
   Controller1.ButtonR1.pressed(raiseClaw);
@@ -338,7 +348,16 @@ void pre_auton(void) {
 /*  You must modify the code to add your own robot specific commands here.   */
 /*---------------------------------------------------------------------------*/
 
+void driveForward(double feet) {
+  double feetInTurns = feet * 24.0 / 15.0;
+  FrontLeftDrive.spinTo(feetInTurns, turns, false);
+  BackLeftDrive.spinTo(feetInTurns, turns, false);
+  FrontRightDrive.spinTo(feetInTurns, turns, false);
+  BackRightDrive.spinTo(feetInTurns, turns);
+}
+
 void autonomous(void) {
+  driveForward(2);
   // ..........................................................................
   // Insert autonomous user code here.
   // ..........................................................................
