@@ -49,6 +49,7 @@ bool isRotationalClawScoring = false;
 digital_out Toggle = digital_out(Brain.ThreeWirePort.A);
 
 inertial RotationalClawSensor = inertial(PORT7);
+inertial InertialSensor = inertial(PORT3);
 
 
 /* 0: in rest position
@@ -391,12 +392,21 @@ void driveForward(double feet) {
 }
 
 void turnRight(double degree) {
-  double degreeInTurns = 13.5 / 3.25 * 1.5 / 2.0 / 360.0;
-  double negDegreeInTurns = -degreeInTurns;
-  FrontLeftDrive.spinFor(negDegreeInTurns * degree, turns, false);
-  BackLeftDrive.spinFor(negDegreeInTurns * degree, turns, false);
-  FrontRightDrive.spinFor(degreeInTurns * degree, turns, false);
-  BackRightDrive.spinFor(degreeInTurns * degree, turns);
+  double newAngle = degree + InertialSensor.rotation(deg);
+
+  while(InertialSensor.rotation(deg) < newAngle) {
+    FrontLeftDrive.spin(reverse);
+    BackLeftDrive.spin(reverse);
+    FrontRightDrive.spin(forward);
+    BackRightDrive.spin(forward);
+
+    wait(5, msec);
+  }
+
+  FrontLeftDrive.stop();
+  BackLeftDrive.stop();
+  FrontRightDrive.stop();
+  BackRightDrive.stop();
 }
 
 int autonomousState = 0;
@@ -410,32 +420,28 @@ void autonomousScoringThread() {
   }
 
   outakeRotationalClaw();
+  wait(1, sec);
   
   autonomousState = 2;
   
 }
 
 void autonomous(void) {
+  thread aThread = thread(autonomousScoringThread);
+
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+  driveForward(-0.5);
   turnRight(90);
-  // thread aThread = thread(autonomousScoringThread);
+  driveForward(-19.0 / 12.0);
+  autonomousState = 1;
 
-  // flipToggle();
-  // wait(0.5, seconds);
-  // flipToggle();
-  // driveForward(-0.5);
-  // turnRight(90);
-  // driveForward(-19.0 / 12);
-  // autonomousState = 1;
+  while (autonomousState < 2) {
+    wait(20, msec);
+  }
 
-  // while (autonomousState < 2) {
-  //   wait(20, msec);
-  // }
-
-  // driveForward(0.5);
-
-  // ..........................................................................
-  // Insert autonomous user code here.
-  // ..........................................................................
+  driveForward(0.5);
 }
 
 /*---------------------------------------------------------------------------*/
