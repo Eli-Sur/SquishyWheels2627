@@ -350,19 +350,19 @@ void pre_auton(void) {
 
 void driveForward(double feet) {
   double feetInTurns = feet * 24.0 / 15.0;
-  FrontLeftDrive.spinTo(feetInTurns, turns, false);
-  BackLeftDrive.spinTo(feetInTurns, turns, false);
-  FrontRightDrive.spinTo(feetInTurns, turns, false);
-  BackRightDrive.spinTo(feetInTurns, turns);
+  FrontLeftDrive.spinFor(feetInTurns, turns, false);
+  BackLeftDrive.spinFor(feetInTurns, turns, false);
+  FrontRightDrive.spinFor(feetInTurns, turns, false);
+  BackRightDrive.spinFor(feetInTurns, turns);
 }
 
 void turnRight(double degree) {
   double degreeInTurns = 13.5 / 3.25 * 1.5 / 2.0 / 360.0;
-
-  FrontLeftDrive.spinTo(degreeInTurns * degree, turns, false);
-  BackLeftDrive.spinTo(degreeInTurns * degree, turns, false);
-  FrontRightDrive.spinTo(degreeInTurns * degree, turns, false);
-  BackRightDrive.spinTo(degreeInTurns * degree, turns);
+  double negDegreeInTurns = -degreeInTurns;
+  FrontLeftDrive.spinFor(negDegreeInTurns * degree, turns, false);
+  BackLeftDrive.spinFor(negDegreeInTurns * degree, turns, false);
+  FrontRightDrive.spinFor(degreeInTurns * degree, turns, false);
+  BackRightDrive.spinFor(degreeInTurns * degree, turns);
 }
 
 int autonomousState = 0;
@@ -382,21 +382,22 @@ void autonomousScoringThread() {
 }
 
 void autonomous(void) {
-  thread aThread = thread(autonomousScoringThread);
-
-  flipToggle();
-  wait(0.5, seconds);
-  flipToggle();
-  driveForward(-0.5);
   turnRight(90);
-  driveForward(-19.0 / 12);
-  autonomousState = 1;
+  // thread aThread = thread(autonomousScoringThread);
 
-  while (autonomousState < 2) {
-    wait(20, msec);
-  }
+  // flipToggle();
+  // wait(0.5, seconds);
+  // flipToggle();
+  // driveForward(-0.5);
+  // turnRight(90);
+  // driveForward(-19.0 / 12);
+  // autonomousState = 1;
 
-  driveForward(0.5);
+  // while (autonomousState < 2) {
+  //   wait(20, msec);
+  // }
+
+  // driveForward(0.5);
 
   // ..........................................................................
   // Insert autonomous user code here.
