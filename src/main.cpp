@@ -48,6 +48,8 @@ bool isRotationalClawScoring = false;
 
 digital_out Toggle = digital_out(Brain.ThreeWirePort.A);
 
+inertial RotationalClawSensor = inertial(PORT7);
+
 
 /* 0: in rest position
  * 1: intaking
@@ -150,16 +152,48 @@ void stopRotationalClaw() {
   RotationalClaw.stop();
 }
 
+double getRotationalClawAngle() {
+  return -RotationalClawSensor.orientation(roll, deg);
+}
+
 void rotationalClawAnglePositionToLoading(bool waitForCompletion = false) {
-  RotationalClawAngle.spinToPosition(0, degrees, waitForCompletion);
+  double angle = getRotationalClawAngle();
+  while(angle > 2) {
+    RotationalClawAngle.spin(reverse);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  RotationalClawAngle.stop();
 }
 
 void rotationalClawAnglePositionToScoring(bool waitForCompletion = false) {
-  RotationalClawAngle.spinToPosition(190, degrees, waitForCompletion);
+  double angle = getRotationalClawAngle();
+  while(angle < 90) {
+    RotationalClawAngle.spin(forward);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  while(angle > 95) {
+    RotationalClawAngle.spin(reverse);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  RotationalClawAngle.stop();
 }
 
 void rotationalClawAnglePositionToMaxScoring(bool waitForCompletion = false) {
-  RotationalClawAngle.spinToPosition(270, degrees, waitForCompletion);
+  double angle = getRotationalClawAngle();
+  while(angle < 140) {
+    RotationalClawAngle.spin(forward);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  while(angle > 145) {
+    RotationalClawAngle.spin(reverse);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  RotationalClawAngle.stop();
 }
 
 void spinIntakeForward() {
