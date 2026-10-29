@@ -48,6 +48,9 @@ bool isRotationalClawScoring = false;
 
 digital_out Toggle = digital_out(Brain.ThreeWirePort.A);
 
+inertial RotationalClawSensor = inertial(PORT7);
+inertial InertialSensor = inertial(PORT3);
+
 
 /* 0: in rest position
  * 1: intaking
@@ -150,16 +153,48 @@ void stopRotationalClaw() {
   RotationalClaw.stop();
 }
 
+double getRotationalClawAngle() {
+  return -RotationalClawSensor.orientation(roll, deg);
+}
+
 void rotationalClawAnglePositionToLoading(bool waitForCompletion = false) {
-  RotationalClawAngle.spinToPosition(0, degrees, waitForCompletion);
+  double angle = getRotationalClawAngle();
+  while(angle > 2) {
+    RotationalClawAngle.spin(reverse);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  RotationalClawAngle.stop();
 }
 
 void rotationalClawAnglePositionToScoring(bool waitForCompletion = false) {
-  RotationalClawAngle.spinToPosition(190, degrees, waitForCompletion);
+  double angle = getRotationalClawAngle();
+  while(angle < 90) {
+    RotationalClawAngle.spin(forward);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  while(angle > 95) {
+    RotationalClawAngle.spin(reverse);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  RotationalClawAngle.stop();
 }
 
 void rotationalClawAnglePositionToMaxScoring(bool waitForCompletion = false) {
-  RotationalClawAngle.spinToPosition(270, degrees, waitForCompletion);
+  double angle = getRotationalClawAngle();
+  while(angle < 140) {
+    RotationalClawAngle.spin(forward);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  while(angle > 145) {
+    RotationalClawAngle.spin(reverse);
+    wait(5, msec);
+    angle = getRotationalClawAngle();
+  }
+  RotationalClawAngle.stop();
 }
 
 void spinIntakeForward() {
@@ -350,19 +385,28 @@ void pre_auton(void) {
 
 void driveForward(double feet) {
   double feetInTurns = feet * 24.0 / 15.0;
-  FrontLeftDrive.spinTo(feetInTurns, turns, false);
-  BackLeftDrive.spinTo(feetInTurns, turns, false);
-  FrontRightDrive.spinTo(feetInTurns, turns, false);
-  BackRightDrive.spinTo(feetInTurns, turns);
+  FrontLeftDrive.spinFor(feetInTurns, turns, false);
+  BackLeftDrive.spinFor(feetInTurns, turns, false);
+  FrontRightDrive.spinFor(feetInTurns, turns, false);
+  BackRightDrive.spinFor(feetInTurns, turns);
 }
 
 void turnRight(double degree) {
-  double degreeInTurns = 13.5 / 3.25 * 1.5 / 2.0 / 360.0;
+  double newAngle = degree + InertialSensor.rotation(deg);
 
-  FrontLeftDrive.spinTo(degreeInTurns * degree, turns, false);
-  BackLeftDrive.spinTo(degreeInTurns * degree, turns, false);
-  FrontRightDrive.spinTo(degreeInTurns * degree, turns, false);
-  BackRightDrive.spinTo(degreeInTurns * degree, turns);
+  while(InertialSensor.rotation(deg) < newAngle) {
+    FrontLeftDrive.spin(reverse);
+    BackLeftDrive.spin(reverse);
+    FrontRightDrive.spin(forward);
+    BackRightDrive.spin(forward);
+
+    wait(5, msec);
+  }
+
+  FrontLeftDrive.stop();
+  BackLeftDrive.stop();
+  FrontRightDrive.stop();
+  BackRightDrive.stop();
 }
 
 int autonomousState = 0;
@@ -376,6 +420,7 @@ void autonomousScoringThread() {
   }
 
   outakeRotationalClaw();
+  wait(1, sec);
   
   autonomousState = 2;
   
@@ -389,7 +434,7 @@ void autonomous(void) {
   flipToggle();
   driveForward(-0.5);
   turnRight(90);
-  driveForward(-19.0 / 12);
+  driveForward(-19.0 / 12.0);
   autonomousState = 1;
 
   while (autonomousState < 2) {
@@ -397,10 +442,6 @@ void autonomous(void) {
   }
 
   driveForward(0.5);
-
-  // ..........................................................................
-  // Insert autonomous user code here.
-  // ..........................................................................
 }
 
 /*---------------------------------------------------------------------------*/
