@@ -31,8 +31,13 @@ motor BackLeftDrive = motor(PORT1, ratio18_1, false);
 motor FrontRightDrive = motor(PORT12, ratio18_1, false);
 motor FrontLeftDrive = motor(PORT2, ratio18_1, true);
 
-motor CascadeMotor = motor(PORT15, ratio18_1, true);
+motor CascadeMotor = motor(PORT15, ratio36_1, true);
 bool isSetUp = false;
+double LAYER_HEIGHT = 3;
+double CASCADE_MIN_POSITION = 2.1;
+double CASCADE_MAX_POSITION = 3 * LAYER_HEIGHT + CASCADE_MIN_POSITION;
+
+double cascadeLayer = 0;
 
 motor IntakeMotor = motor(PORT13, ratio18_1, false);
 
@@ -116,19 +121,21 @@ void drawTexanFlag() {
 void spinCascadeToPos(double turn, bool waitForCompletion = false) {
   if(turn < 0) {
     CascadeMotor.spinTo(0, turns, waitForCompletion);
-  } else if(turn > 3 * 6 + 2) {
-    CascadeMotor.spinTo(3 * 6 + 2, turns, waitForCompletion);
+  } else if(turn > CASCADE_MAX_POSITION) {
+    CascadeMotor.spinTo(CASCADE_MAX_POSITION, turns, waitForCompletion);
   } else {
     CascadeMotor.spinTo(turn, turns, waitForCompletion);
   }
 }
 
 void raiseCascade() {
-  spinCascadeToPos(CascadeMotor.position(turns) + 6, true);
+  cascadeLayer++;
+  spinCascadeToPos(cascadeLayer * LAYER_HEIGHT, true);
 }
 
 void lowerCascade() {
-  spinCascadeToPos(CascadeMotor.position(turns) - 6, true);
+  cascadeLayer--;
+  spinCascadeToPos(cascadeLayer * LAYER_HEIGHT, true);
 }
 
 void intakeRotationalClaw() {
@@ -151,6 +158,10 @@ void rotationalClawAnglePositionToScoring(bool waitForCompletion = false) {
   RotationalClawAngle.spinToPosition(190, degrees, waitForCompletion);
 }
 
+void rotationalClawAnglePositionToMaxScoring(bool waitForCompletion = false) {
+  RotationalClawAngle.spinToPosition(270, degrees, waitForCompletion);
+}
+
 void spinIntakeForward() {
   IntakeMotor.spin(forward, 11, volt);
 }
@@ -163,9 +174,10 @@ void spinIntakeReverse() {
 
 void setToRestState() {
   intakeState = 0;
+  cascadeLayer = 0;
   RotationalClaw.stop();
   IntakeMotor.stop();
-  spinCascadeToPos(0, true);
+  CascadeMotor.spinToPosition(0, degrees, true);
 
   rotationalClawAnglePositionToLoading(true);
 }
@@ -188,7 +200,7 @@ void setToRaiseState() {
   intakeState = 2;
   setToRestState();
   rotationalClawAnglePositionToScoring();
-  CascadeMotor.spinTo(2, turns, true);
+  raiseCascade();
 }
 
 void setToScoreState() {
@@ -201,6 +213,12 @@ void setToUnscoreState() {
   intakeState = -3;
   intakeRotationalClaw();
   lowerCascade();
+}
+
+void setToMaxScoreState() {
+  intakeState = 4;
+  outakeRotationalClaw();
+  rotationalClawAnglePositionToMaxScoring();
 }
 
 // These functions are called by the controller
@@ -230,9 +248,14 @@ bool isCascadeUp() {
 }
 
 void raiseClaw() {
+  if(intakeState == -3) {
+    stopRotationalClaw();
+  }
+
   if(!isCascadeUp()) {
     setToRaiseState();
   } else {
+    rotationalClawAnglePositionToScoring();
     raiseCascade();
   }
   intakeState = 2;
@@ -242,17 +265,25 @@ void lowerClaw() {
   if(!isCascadeUp()) {
     return;
   }
+  if(intakeState == 3) {
+    stopRotationalClaw();
+  }
   intakeState = -2;
-  if(CascadeMotor.position(turns) <= 6) {
+  if(cascadeLayer == 0) {
     setToRestState();
   } else {
+    rotationalClawAnglePositionToScoring();
     lowerCascade();
   }
 }
 
 void score() {
-  if(isCascadeUp()) {
+  if(!isCascadeUp()) { return; }
+
+  if(cascadeLayer < 3) {
     setToScoreState();
+  } else {
+    setToMaxScoreState();
   }
 }
 
@@ -265,11 +296,7 @@ void unscore() {
 // These functions sets up the robot
 
 void setUp() {
-  CascadeMotor.spin(forward, 1, volt);
-
-  wait(2, sec);
-
-  CascadeMotor.stop();
+  isSetUp = true;
 
   RotationalClawAngle.setBrake(hold);
   RotationalClawAngle.setPosition(0, degrees);
@@ -277,13 +304,27 @@ void setUp() {
   CascadeMotor.setBrake(hold);
   CascadeMotor.setVelocity(100, percent);
 
-  CascadeMotor.setPosition(0, degrees);
+  FrontLeftDrive.setVelocity(100, percent);
+  FrontRightDrive.setVelocity(100, percent);
+  BackLeftDrive.setVelocity(100, percent);
+  BackRightDrive.setVelocity(100, percent);
 
-  isSetUp = true;
+  FrontLeftDrive.setBrake(hold);
+  FrontRightDrive.setBrake(hold);
+  BackLeftDrive.setBrake(hold);
+  BackRightDrive.setBrake(hold);
+
+  CascadeMotor.spin(forward, 2, volt);
+
+  wait(2, sec);
+
+  CascadeMotor.stop();
+
+  CascadeMotor.setPosition(0, degrees);
 }
 
 void pre_auton(void) {
-  setUp();
+  thread one = thread(setUp);
   Controller1.ButtonL1.pressed(intake);
   Controller1.ButtonL2.pressed(outake);
   Controller1.ButtonR1.pressed(raiseClaw);
@@ -307,7 +348,56 @@ void pre_auton(void) {
 /*  You must modify the code to add your own robot specific commands here.   */
 /*---------------------------------------------------------------------------*/
 
+void driveForward(double feet) {
+  double feetInTurns = feet * 24.0 / 15.0;
+  FrontLeftDrive.spinTo(feetInTurns, turns, false);
+  BackLeftDrive.spinTo(feetInTurns, turns, false);
+  FrontRightDrive.spinTo(feetInTurns, turns, false);
+  BackRightDrive.spinTo(feetInTurns, turns);
+}
+
+void turnRight(double degree) {
+  double degreeInTurns = 13.5 / 3.25 * 1.5 / 2.0 / 360.0;
+
+  FrontLeftDrive.spinTo(degreeInTurns * degree, turns, false);
+  BackLeftDrive.spinTo(degreeInTurns * degree, turns, false);
+  FrontRightDrive.spinTo(degreeInTurns * degree, turns, false);
+  BackRightDrive.spinTo(degreeInTurns * degree, turns);
+}
+
+int autonomousState = 0;
+
+void autonomousScoringThread() {
+  wait(2, seconds);
+  rotationalClawAnglePositionToScoring();
+
+  while (autonomousState < 1) {
+    wait(20, msec);
+  }
+
+  outakeRotationalClaw();
+  
+  autonomousState = 2;
+  
+}
+
 void autonomous(void) {
+  thread aThread = thread(autonomousScoringThread);
+
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+  driveForward(-0.5);
+  turnRight(90);
+  driveForward(-19.0 / 12);
+  autonomousState = 1;
+
+  while (autonomousState < 2) {
+    wait(20, msec);
+  }
+
+  driveForward(0.5);
+
   // ..........................................................................
   // Insert autonomous user code here.
   // ..........................................................................
