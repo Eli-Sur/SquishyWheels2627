@@ -51,6 +51,8 @@ digital_out Toggle = digital_out(Brain.ThreeWirePort.A);
 inertial RotationalClawSensor = inertial(PORT7);
 inertial InertialSensor = inertial(PORT3);
 
+bool isRightAutonomous = false;
+
 
 /* 0: in rest position
  * 1: intaking
@@ -167,7 +169,7 @@ void rotationalClawAnglePositionToLoading(bool waitForCompletion = false) {
   RotationalClawAngle.stop();
 }
 
-void rotationalClawAnglePositionToScoring(bool waitForCompletion = false) {
+void rotationalClawAnglePositionToScoring() {
   double angle = getRotationalClawAngle();
   while(angle < 90) {
     RotationalClawAngle.spin(forward);
@@ -234,7 +236,7 @@ void setToOutakeState() {
 void setToRaiseState() {
   intakeState = 2;
   setToRestState();
-  rotationalClawAnglePositionToScoring();
+  thread aThread = thread(rotationalClawAnglePositionToScoring);
   raiseCascade();
 }
 
@@ -291,7 +293,13 @@ void raiseClaw() {
     setToRaiseState();
   } else {
     rotationalClawAnglePositionToScoring();
-    raiseCascade();
+    // raiseCascade();
+    
+    CascadeMotor.spin(forward);
+
+    waitUntil(!Controller1.ButtonR1.pressing());
+
+    CascadeMotor.stop();
   }
   intakeState = 2;
 }
@@ -303,13 +311,20 @@ void lowerClaw() {
   if(intakeState == 3) {
     stopRotationalClaw();
   }
-  intakeState = -2;
-  if(cascadeLayer == 0) {
-    setToRestState();
-  } else {
-    rotationalClawAnglePositionToScoring();
-    lowerCascade();
-  }
+  // intakeState = -2;
+  // if(cascadeLayer == 0) {
+  //   setToRestState();
+  // } else {
+  //   rotationalClawAnglePositionToScoring();
+  //   lowerCascade();
+  // }
+  rotationalClawAnglePositionToScoring();
+
+  CascadeMotor.spin(reverse);
+
+  waitUntil(!Controller1.ButtonR2.pressing());
+
+  CascadeMotor.stop();
 }
 
 void score() {
@@ -358,6 +373,23 @@ void setUp() {
   CascadeMotor.setPosition(0, degrees);
 }
 
+void setUpAutonomous() {
+  Brain.Screen.clearScreen();
+  Brain.Screen.setFillColor(red);
+  Brain.Screen.drawRectangle(0, 0, 480 / 2, 240);
+  Brain.Screen.setFillColor(blue);
+  Brain.Screen.drawRectangle(480 / 2, 0, 480 / 2, 240);
+
+  waitUntil(Brain.Screen.pressing());
+  double xPos = Brain.Screen.xPosition();
+  isRightAutonomous = xPos > 480 / 2;
+
+
+  Brain.Screen.clearScreen();
+  Brain.Screen.setFillColor(black);
+  Brain.Screen.print(isRightAutonomous ? "Right Auton" : "Left Auton");
+}
+
 void pre_auton(void) {
   thread one = thread(setUp);
   Controller1.ButtonL1.pressed(intake);
@@ -369,8 +401,7 @@ void pre_auton(void) {
   Controller1.ButtonX.pressed(flipToggle);
   Controller1.ButtonB.pressed(setToRestState);
 
-  // All activities that occur before the competition starts
-  // Example: clearing encoders, setting servo positions, ...
+  setUpAutonomous();
 }
 
 /*---------------------------------------------------------------------------*/
@@ -393,14 +424,36 @@ void driveForward(double feet) {
 
 void turnRight(double degree) {
   double newAngle = degree + InertialSensor.rotation(deg);
+  double difference = InertialSensor.rotation(deg) - newAngle;
 
-  while(InertialSensor.rotation(deg) < newAngle) {
-    FrontLeftDrive.spin(reverse);
-    BackLeftDrive.spin(reverse);
-    FrontRightDrive.spin(forward);
-    BackRightDrive.spin(forward);
+  while(difference < -1 || difference > 3) {
+    FrontLeftDrive.spin(forward, 10 * (difference / 30) - 4, volt);
+    BackLeftDrive.spin(forward, 10 * (difference / 30) - 4, volt);
+    FrontRightDrive.spin(reverse, 10 * (difference / 30) + 4, volt);
+    BackRightDrive.spin(reverse, 10 * (difference / 30) + 4, volt);
 
     wait(5, msec);
+    difference = InertialSensor.rotation(deg) - newAngle;
+  }
+
+  FrontLeftDrive.stop();
+  BackLeftDrive.stop();
+  FrontRightDrive.stop();
+  BackRightDrive.stop();
+}
+
+void turnLeft(double degree) {
+  double newAngle = -degree + InertialSensor.rotation(deg);
+  double difference = InertialSensor.rotation(deg) - newAngle;
+
+  while(difference < -3 || difference > 1) {
+    FrontLeftDrive.spin(forward, 10 * (difference / 30) + 4, volt);
+    BackLeftDrive.spin(forward, 10 * (difference / 30) + 4, volt);
+    FrontRightDrive.spin(reverse, 10 * (difference / 30) - 4, volt);
+    BackRightDrive.spin(reverse, 10 * (difference / 30) - 4, volt);
+
+    wait(5, msec);
+    difference = InertialSensor.rotation(deg) - newAngle;
   }
 
   FrontLeftDrive.stop();
@@ -414,34 +467,84 @@ int autonomousState = 0;
 void autonomousScoringThread() {
   wait(2, seconds);
   rotationalClawAnglePositionToScoring();
-
-  while (autonomousState < 1) {
-    wait(20, msec);
-  }
-
-  outakeRotationalClaw();
-  wait(1, sec);
-  
-  autonomousState = 2;
-  
-}
-
-void autonomous(void) {
-  thread aThread = thread(autonomousScoringThread);
-
-  flipToggle();
-  wait(0.5, seconds);
-  flipToggle();
-  driveForward(-0.5);
-  turnRight(90);
-  driveForward(-19.0 / 12.0);
   autonomousState = 1;
 
   while (autonomousState < 2) {
     wait(20, msec);
   }
 
+  outakeRotationalClaw();
+  wait(1, sec);
+  
+  autonomousState = 3;
+  
+}
+
+void leftAutonomous() {
+  driveForward(-0.0833 * 2);
+  wait(0.1, seconds);
+
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+  wait(0.5, seconds);
+  driveForward(0.03);
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+
+  driveForward(-1.01);
+  turnRight(90);
+  while (autonomousState < 1) {
+    wait(20, msec);
+  }
+  driveForward(-19.0 / 12.0);
+  autonomousState = 2;
+
+  while (autonomousState < 3) {
+    wait(20, msec);
+  }
+
   driveForward(0.5);
+}
+
+void rightAutonomous() {
+  driveForward(-0.0833 * 2);
+  wait(0.1, seconds);
+
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+  wait(0.5, seconds);
+  driveForward(0.03);
+  flipToggle();
+  wait(0.5, seconds);
+  flipToggle();
+
+  driveForward(-1.2);
+  turnLeft(90);
+  while (autonomousState < 1) {
+    wait(20, msec);
+  }
+  driveForward(-19.0 / 12.0);
+  wait(0.2, seconds);
+  driveForward(-0.0);
+  autonomousState = 2;
+
+  while (autonomousState < 3) {
+    wait(20, msec);
+  }
+
+  driveForward(0.5);
+}
+
+void autonomous(void) {
+  thread aThread = thread(autonomousScoringThread);
+  if(isRightAutonomous) {
+    rightAutonomous();
+  } else {
+    leftAutonomous();
+  }
 }
 
 /*---------------------------------------------------------------------------*/
